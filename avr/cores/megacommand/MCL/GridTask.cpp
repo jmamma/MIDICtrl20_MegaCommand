@@ -21,10 +21,10 @@ uint16_t compare_memory(void* _pa, void* _pb, uint16_t len)
 void GridTask::run() {
   EmptyTrack empty_track;
   MDTrack *md_track = (MDTrack *)&empty_track;
-  if (MidiClock.state != 2) {
-    return;
-  }
+
   GUI.removeTask(&grid_task);
+  while(true) {
+
 
   DEBUG_PRINT_FN();
 
@@ -62,6 +62,7 @@ void GridTask::run() {
 
     } else {
     }   
+  }
   }
   GUI.addTask(&grid_task);
 }
