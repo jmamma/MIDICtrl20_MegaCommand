@@ -28,32 +28,24 @@ void GridTask::run() {
 
   DEBUG_PRINT_FN();
 
-  uint8_t row =  grid_page.getRow();
-
   uint16_t size =
       sizeof(GridTrack) + sizeof(MDSeqTrackData) + sizeof(MDMachine);
 
-  // Load slots from Grid and store in memory BANK2
-  for (uint8_t n = 0; n < 16; n++) {
-    md_track->load_track_from_grid(n, row, size);
-    md_track->store_in_mem(n);
-  }
-
-  // Do nothing for 2 seconds.
-  uint32_t start_clock = slowclock;
-  while (clock_diff(start_clock, slowclock) < 2000) {
-    GUI.loop();
-  }
   EmptyTrack empty_track2;
   MDTrack *md_track2 = (MDTrack *)&empty_track2;
 
   // Compare slots from grid with load from memory BANK2
-  for (uint8_t n = 0; n < 16; n++) {
-    md_track->load_track_from_grid(n, row, size);
+  for (uint8_t n = 11; n < 12; n++) {
+    md_track->load_from_mem(n);
+    // Do nothing for 2 seconds.
+    uint32_t start_clock = slowclock;
+    while (clock_diff(start_clock, slowclock) < 500) {
+      GUI.loop();
+    }
     md_track2->load_from_mem(n);
     uint16_t cbyte = compare_memory((md_track), (md_track2), size);
     if (cbyte != size) {
-      char str[10];
+      char str[16];
       char pos[5];
       char val[5];
       itoa(n, str, 10);
