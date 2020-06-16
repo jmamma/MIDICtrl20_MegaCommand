@@ -154,8 +154,6 @@ void MCLSeq::onMidiStopCallback() {
 #endif
 void MCLSeq::seq() {
 
-  return;
-
   for (uint8_t i = 0; i < num_md_tracks; i++) {
     md_tracks[i].seq();
   }

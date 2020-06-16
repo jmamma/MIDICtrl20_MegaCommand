@@ -28,9 +28,6 @@ public:
   uint64_t lock_mask;
   uint8_t conditional[NUM_MD_STEPS];
   uint8_t timing[NUM_MD_STEPS];
-
-  uint8_t __pad__[1];
-
   void init() {
   length = 16;
   speed = 1;
