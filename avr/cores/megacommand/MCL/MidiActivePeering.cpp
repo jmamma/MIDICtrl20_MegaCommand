@@ -41,7 +41,7 @@ static MidiDevice* port1_drivers[] = {
 };
 
 static MidiDevice* port2_drivers[] = {
-  &MNM,
+  //&MNM,
   &Analog4,
   &generic_midi_device,
 };

@@ -19,12 +19,12 @@ MidiClass Midi2(&MidiUart2, SYSEX2_DATA_LEN, (volatile uint8_t*)BANK1_SYSEX2_DAT
 // -- Sysex listeners
 MidiIDSysexListenerClass MidiIDSysexListener;
 MDSysexListenerClass MDSysexListener;
-MNMSysexListenerClass MNMSysexListener;
+//MNMSysexListenerClass MNMSysexListener;
 A4SysexListenerClass A4SysexListener;
 
 // -- Device drivers
 MDClass MD;
-MNMClass MNM;
+//MNMClass MNM;
 A4Class Analog4;
 GenericMidiDevice generic_midi_device;
 NullMidiDevice null_midi_device;
