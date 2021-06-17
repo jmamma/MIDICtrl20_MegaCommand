@@ -30,7 +30,7 @@ typedef struct model_param_name_s {
 /** Data structure holding the parameter names for a machine model. **/
 typedef struct model_to_param_names_s {
   uint8_t model;
-  const model_param_name_t *names;
+  uint16_t offset; // offset of the first param in the lookup table
 } model_to_param_names_t;
 
 typedef struct short_machine_name_s {
@@ -182,13 +182,12 @@ public:
   MidiUartParent* uart;
   const char* const name;
   const uint8_t id; // Device identifier
-  const uint8_t* const icon;
   const bool isElektronDevice;
 
   GridDevice grid_devices[NUM_GRIDS];
 
-  MidiDevice(MidiClass* _midi, const char* _name, const uint8_t _id, const uint8_t* _icon, const bool _isElektronDevice)
-    : name(_name), id(_id), icon(_icon), isElektronDevice(_isElektronDevice)
+  MidiDevice(MidiClass* _midi, const char* _name, const uint8_t _id, const bool _isElektronDevice)
+    : name(_name), id(_id), isElektronDevice(_isElektronDevice)
   {
     midi = _midi;
     uart = midi ? midi->uart : nullptr;
@@ -213,6 +212,8 @@ public:
 
   virtual void disconnect() { cleanup(); connected = false; }
   virtual bool probe() = 0;
+  // 34x42 bitmap icon of the device
+  virtual uint8_t *icon() { return nullptr; }
 };
 
 /// Base class for Elektron sysex listeners
@@ -363,7 +364,10 @@ public:
   int currentGlobal;
   /** Stores the current kit of the MD, usually set by the MDTask. **/
   int currentKit;
+
   int currentTrack;
+  int currentSynthPage;
+
   /** Stores the current pattern of the MD, usually set by the MDTask. **/
   int currentPattern;
   /** Set to true if the kit was loaded (usually set by MDTask). **/
@@ -372,9 +376,9 @@ public:
   bool loadedGlobal;
 
   ElektronDevice(
-      MidiClass* _midi, const char* _name, const uint8_t _id, const uint8_t* _icon,
+      MidiClass* _midi, const char* _name, const uint8_t _id,
       const ElektronSysexProtocol& protocol)
-    : MidiDevice(_midi, _name, _id, _icon, true), sysex_protocol(protocol) {
+    : MidiDevice(_midi, _name, _id, true), sysex_protocol(protocol) {
 
       currentGlobal = -1;
       currentKit = -1;
@@ -417,16 +421,33 @@ public:
    * Return a pointer to a program-space string representing the name of the
    *given machine.
    **/
-  virtual PGM_P getMachineName(uint8_t machine) { return nullptr; }
+  virtual const char* getMachineName(uint8_t machine) { return nullptr; }
 
   bool get_fw_caps();
+
+  void sync_seqtrack(uint8_t length, uint8_t speed, uint8_t step_count);
+
+  void activate_encoder_interface(uint8_t *params);
+  void deactivate_encoder_interface();
+
+  void activate_enhanced_gui();
+  void deactivate_enhanced_gui();
+
+  void set_seq_page(uint8_t page);
+
+  void set_rec_mode(uint8_t mode);
+
+  void popup_text(uint8_t action_string);
+  void popup_text(char *str);
+  void draw_close_microtiming();
+  void draw_microtiming(uint8_t speed, uint8_t timing);
 
   void activate_trig_interface();
   void deactivate_trig_interface();
 
   void activate_track_select();
   void deactivate_track_select();
-  void set_trigleds(uint16_t bitmask, TrigLEDMode mode);
+  void set_trigleds(uint16_t bitmask, TrigLEDMode mode, uint8_t blink = 0);
 
   void undokit_sync();
   /**
@@ -539,6 +560,9 @@ public:
 
 };
 
-extern PGM_P getMachineNameShort(uint8_t machine, uint8_t type, const short_machine_name_t* table, size_t size);
+extern const char* getMachineNameShort(uint8_t machine, uint8_t type, const short_machine_name_t* table, size_t size);
+#define copyMachineNameShort(src, dst) \
+  (dst)[0] = (src)[0]; \
+  (dst)[1] = (src)[1];
 
 #endif /* ELEKTRON_H__ */

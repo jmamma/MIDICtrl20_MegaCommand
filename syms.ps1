@@ -10,7 +10,9 @@ function parse-symbol($line) {
   $seg = $line.Substring(17,5).Trim()
   try {
     $size = [int64]("0x"+$line.Substring(23,8).Trim())
-    $name = $line.Substring(31).Replace(".hidden ", "").Trim()
+    $name = $line.Substring(31)
+    $hidden =  $name -match ".hidden"
+    $name = $name.Replace(".hidden ", "").Trim()
     if ($Size -eq "00000000") {
       return
     }
@@ -20,12 +22,13 @@ function parse-symbol($line) {
       Segment = $seg
       Size = $size
       Name = $name
+      Hidden = $hidden
     }
   } catch {}
 }
 
 Set-Location sketch
-$lines = $(avr-objdump -x sketch.MIDICtrl20_MegaCommand.avr.mega.elf)
+$lines = $(avr-objdump -x build/MIDICtrl20_MegaCommand.avr.mega\sketch.ino.elf)
 $header = $lines | Select-Object -First 37
 $symbols = $lines | Select-Object -Skip 38 | %{ parse-symbol($_) }
 
@@ -36,10 +39,17 @@ $data = $symbols | Where-Object -Property Segment -eq ".data" | Sort-Object -Des
 $lines | Out-File "sym_objdump.txt"
 $header | Out-File "sym_header.txt"
 echo "There are $($text.Count) .text objects"
-$text | Out-GridView 
 echo "There are $($bss.Count) .bss objects"
-$bss | Out-GridView 
 echo "There are $($data.Count) .data objects"
-$data | Out-GridView
 
+$comp_target = $text | Where-Object -Property Flags -Match "O"
+$comp_total_size = 0
+foreach ($obj in $comp_target) {
+  $comp_total_size += $obj.Size
+}
+
+echo "Total compressable object size: $comp_total_size"
+
+$data | Out-GridView
+$bss | Out-GridView
 Set-Location ..

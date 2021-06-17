@@ -64,6 +64,7 @@ public:
 
   virtual bool probe();
   virtual void init_grid_devices();
+  virtual uint8_t* icon();
 
   // TODO not necessary if we have FW_CAP_READ_LIVE_KIT
   virtual bool canReadWorkspaceKit() { return true; }
@@ -78,7 +79,7 @@ public:
 
   virtual void updateKitParams();
   virtual uint16_t sendKitParams(uint8_t *mask, void *);
-  virtual PGM_P getMachineName(uint8_t machine);
+  virtual const char* getMachineName(uint8_t machine);
 
   /**
    * When given the channel and the cc of an incoming CC messages,
@@ -180,7 +181,7 @@ public:
    * the global variable.
    **/
   void sendNoteOn(uint8_t track, uint8_t pitch, uint8_t velocity);
-
+  void parallelTrig(uint16_t mask);
   /**
    * Slice the track (assuming it's a ROM or RAM-P machine) on the
    * given 32th, assuming that the loaded sample is 2 bars long.
