@@ -35,7 +35,7 @@ void PolyPage::draw_mask(uint8_t line_number) {
   for (int i = 0; i < 16; i++) {
 
 #ifdef OLED_DISPLAY
-    if (note_interface.notes[i] > 0) {
+    if (note_interface.is_note(i)) {
 
       oled_display.fillRect(0 + i * 8, 2, 6, 6, WHITE);
     }
@@ -61,7 +61,7 @@ void PolyPage::draw_mask(uint8_t line_number) {
 
       str[i] = (char)'-';
     }
-    if (note_interface.notes[i] > 0) {
+    if (note_interface.is_note(i)) {
 
       str[i] = (char)255;
     }
@@ -96,6 +96,12 @@ void PolyPage::display() {
 #ifdef OLED_DISPLAY
   LCD.goLine(1);
   LCD.puts(GUI.lines[1].data);
+
+  if (mcl_cfg.poly_mask != trigled_mask) {
+    trigled_mask = mcl_cfg.poly_mask;
+    MD.set_trigleds(mcl_cfg.poly_mask, TRIGLED_EXCLUSIVE);
+  }
+
   oled_display.display();
 #endif
 }
@@ -117,7 +123,7 @@ bool PolyPage::handleEvent(gui_event_t *event) {
       toggle_mask(track);
     }
     if (event->mask == EVENT_BUTTON_RELEASED) {
-      note_interface.notes[track] = 0;
+      note_interface.clear_note(track);
     }
     //  }
     return true;

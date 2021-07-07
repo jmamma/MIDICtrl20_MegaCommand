@@ -3,8 +3,11 @@
 
 #define NUM_DEVS 2
 
+#define NUM_CLOCK_CALLBACKS 4
+
 #define RX_BUF_SIZE 0x80UL
 #define TX_BUF_SIZE 0x0C00UL
+#define TX_SEQBUF_SIZE 0x200UL
 
 #define BANK1_UART1_RX_BUFFER_START 0x2200UL
 #define UART1_RX_BUFFER_LEN (RX_BUF_SIZE)
@@ -18,7 +21,19 @@
 #define BANK1_UART2_TX_BUFFER_START (BANK1_UART2_RX_BUFFER_START + UART2_RX_BUFFER_LEN)
 #define UART2_TX_BUFFER_LEN (TX_BUF_SIZE)
 
-#define BANK1_SYSEX1_DATA_START (BANK1_UART2_TX_BUFFER_START + UART2_TX_BUFFER_LEN)
+#define BANK1_UARTSEQ_TX1_BUFFER_START (BANK1_UART2_TX_BUFFER_START + UART2_TX_BUFFER_LEN)
+#define UART1_UARTSEQ_TX1_BUFFER_LEN (TX_SEQBUF_SIZE)
+
+#define BANK1_UARTSEQ_TX2_BUFFER_START (BANK1_UARTSEQ_TX1_BUFFER_START + TX_SEQBUF_SIZE)
+#define UART1_UARTSEQ_TX2_BUFFER_LEN (TX_SEQBUF_SIZE)
+
+#define BANK1_UARTSEQ_TX3_BUFFER_START (BANK1_UARTSEQ_TX2_BUFFER_START + TX_SEQBUF_SIZE)
+#define UART1_UARTSEQ_TX3_BUFFER_LEN (TX_SEQBUF_SIZE)
+
+#define BANK1_UARTSEQ_TX4_BUFFER_START (BANK1_UARTSEQ_TX3_BUFFER_START + TX_SEQBUF_SIZE)
+#define UART1_UARTSEQ_TX4_BUFFER_LEN (TX_SEQBUF_SIZE)
+
+#define BANK1_SYSEX1_DATA_START (BANK1_UARTSEQ_TX4_BUFFER_START + TX_SEQBUF_SIZE)
 #define SYSEX1_DATA_LEN 0x1830UL //6KB
 
 #define BANK1_SYSEX2_DATA_START (BANK1_SYSEX1_DATA_START + SYSEX1_DATA_LEN)
@@ -73,9 +88,7 @@ FORCED_INLINE() extern inline void put_bank1(volatile T *dst, T data) {
   *dst = data;
 }
 
-#endif// __cplusplus
-
-FORCED_INLINE() extern inline void memcpy_bank1(volatile void *dst, volatile const void *src, uint32_t len) {
+FORCED_INLINE() extern inline void memcpy_bank1(volatile void *dst, volatile const void *src, uint16_t len) {
   select_bank(1);
   memcpy((void*)dst, (void*)src, len);
 }
@@ -97,5 +110,6 @@ FORCED_INLINE() extern inline uint8_t get_random_byte() {
     return (pgm_read_byte(rand_ptr++) ^ get_byte_bank1(rand_ptr) ^ slowclock) & 0x7F;
 }
 
+#endif// __cplusplus
 
 #endif /* MEMORY_H__ */

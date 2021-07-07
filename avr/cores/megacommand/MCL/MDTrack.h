@@ -81,7 +81,8 @@ public:
   void clear_track();
   uint16_t calc_latency(uint8_t tracknumber);
   void transition_send(uint8_t tracknumber, uint8_t slotnumber);
-  void transition_load(uint8_t tracknumber, SeqTrack* seq_track, uint8_t slotnumber);
+  void transition_load(uint8_t tracknumber, SeqTrack *seq_track,
+                       uint8_t slotnumber);
   void transition_clear(uint8_t tracknumber, SeqTrack *seq_track) {
     MDSeqTrack *md_seq_track = (MDSeqTrack *)seq_track;
     bool clear_locks = true;
@@ -93,7 +94,8 @@ public:
   void get_machine_from_kit(uint8_t tracknumber);
   bool get_track_from_sysex(uint8_t tracknumber);
 
-  bool store_in_grid(uint8_t column, uint16_t row, SeqTrack *seq_track = nullptr, uint8_t merge = 0,
+  bool store_in_grid(uint8_t column, uint16_t row,
+                     SeqTrack *seq_track = nullptr, uint8_t merge = 0,
                      bool online = false);
   void load_immediate(uint8_t tracknumber, SeqTrack *seq_track);
 
@@ -107,24 +109,34 @@ public:
   void normalize();
 
   bool convert(MDTrack_270 *old) {
-    if (active == MD_TRACK_TYPE_270) {
+    link.row = old->link.row;
+    link.loops = old->link.loops;
+    if (link.row >= GRID_LENGTH) {
+      link.row = GRID_LENGTH - 1;
+    }
+    if (old->active == MD_TRACK_TYPE_270) {
+      memcpy(&machine, &old->machine, sizeof(MDMachine));
       if (old->seq_data.speed < 64) {
-        chain.speed = SEQ_SPEED_1X;
+        link.speed = SEQ_SPEED_1X;
       } else {
-        chain.speed = old->seq_data.speed - 64;
+        link.speed = old->seq_data.speed - 64;
       }
+      link.length = old->seq_data.length;
 
       seq_data.convert(&(old->seq_data));
       active = MD_TRACK_TYPE;
-      return true;
+    } else {
+      link.speed = SEQ_SPEED_1X;
+      link.length = 16;
+      active = EMPTY_TRACK_TYPE;
     }
-    return false;
+    return true;
   }
 
   virtual uint16_t get_track_size() { return sizeof(MDTrack); }
   virtual uint32_t get_region() { return BANK1_MD_TRACKS_START; }
   virtual void on_copy(int16_t s_col, int16_t d_col, bool destination_same);
-  virtual uint8_t get_model() { return machine.model; }
+  virtual uint8_t get_model() { return machine.get_model(); }
   virtual uint8_t get_device_type() { return MD_TRACK_TYPE; }
 
   virtual void *get_sound_data_ptr() { return &machine; }

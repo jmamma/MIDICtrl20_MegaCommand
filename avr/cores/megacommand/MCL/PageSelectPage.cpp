@@ -1,21 +1,6 @@
-#include <avr/pgmspace.h>
 #include "MCL_impl.h"
-
-struct PageCategory {
-  char Name[8];
-  uint8_t PageCount;
-  uint8_t FirstPage;
-};
-
-struct PageSelectEntry {
-  char Name[16];
-  LightPage *Page;
-  uint8_t PageNumber; // same as trig id
-  uint8_t CategoryId;
-  uint8_t IconWidth;
-  uint8_t IconHeight;
-  uint8_t *IconData;
-};
+#include "ResourceManager.h"
+#include <avr/pgmspace.h>
 
 const PageCategory Categories[] PROGMEM = {
     {"MAIN", 4, 0},
@@ -24,38 +9,12 @@ const PageCategory Categories[] PROGMEM = {
     {"AUX", 4, 12},
 };
 
-const PageSelectEntry Entries[] PROGMEM = {
-    {"GRID", &grid_page, 0, 0, 24, 15, (uint8_t *)icon_grid},
-    {"MIXER", &mixer_page, 1, 0, 24, 16, (uint8_t *)icon_mixer},
-    {"ROUTE", &route_page, 2, 0, 24, 16, (uint8_t *)icon_route},
-    {"LFO", &lfo_page, 3, 0, 24, 24, (uint8_t *)icon_lfo},
-
-    {"STEP EDIT", &seq_step_page, 4, 1, 24, 25, (uint8_t *)icon_step},
-    {"RECORD", &seq_rtrk_page, 5, 1, 24, 15, (uint8_t *)icon_rec},
-    {"LOCKS", &seq_param_page[0], 6, 1, 24, 19, (uint8_t *)icon_para},
-    {"CHROMATIC", &seq_ptc_page, 7, 1, 24, 25, (uint8_t *)icon_chroma},
-#ifdef SOUND_PAGE
-    {"SOUND MANAGER", &sound_browser, 8, 2, 24, 19, (uint8_t *)icon_sound},
-#endif
-#ifdef WAV_DESIGNER
-    {"WAV DESIGNER", &wd.pages[0], 9, 2, 24, 19, (uint8_t *)icon_wavd},
-#endif
-#ifdef LOUDNESS_PAGE
-    {"LOUDNESS", &loudness_page, 10, 2, 24, 16, (uint8_t *)icon_loudness},
-#endif
-    {"DELAY", &fx_page_a, 12, 3, 24, 25, (uint8_t *)icon_rhytmecho},
-    {"REVERB", &fx_page_b, 13, 3, 24, 25, (uint8_t *)icon_gatebox},
-    {"RAM-1", &ram_page_a, 14, 3, 24, 25, (uint8_t *)icon_ram1},
-    {"RAM-2", &ram_page_b, 15, 3, 24, 25, (uint8_t *)icon_ram2},
-};
-
 constexpr uint8_t n_category = sizeof(Categories) / sizeof(PageCategory);
-constexpr uint8_t n_entry = sizeof(Entries) / sizeof(PageSelectEntry);
 
 static uint8_t get_pageidx(uint8_t page_number) {
   uint8_t i = 0;
-  for (; i < n_entry; ++i) {
-    if (page_number == pgm_read_byte(&Entries[i].PageNumber)) {
+  for (; i < R.page_entries->countof_Entries; ++i) {
+    if (page_number == R.page_entries->Entries[i].PageNumber) {
       break;
     }
   }
@@ -63,11 +22,11 @@ static uint8_t get_pageidx(uint8_t page_number) {
 }
 
 static LightPage *get_page(uint8_t pageidx, char *str) {
-  if (pageidx < n_entry) {
+  if (pageidx < R.page_entries->countof_Entries) {
     if (str) {
-      m_strncpy_p(str, (PGM_P) & (Entries[pageidx].Name), 16);
+      strcpy(str, R.page_entries->Entries[pageidx].Name);
     }
-    return (LightPage*)pgm_read_word(&Entries[pageidx].Page);
+    return R.page_entries->Entries[pageidx].Page;
   } else {
     if (str) {
       strncpy(str, "----", 5);
@@ -76,12 +35,12 @@ static LightPage *get_page(uint8_t pageidx, char *str) {
   }
 }
 
-static void get_page_icon(uint8_t pageidx, const uint8_t *&icon, uint8_t &w,
+static void get_page_icon(uint8_t pageidx, uint8_t *&icon, uint8_t &w,
                           uint8_t &h) {
-  if (pageidx < n_entry) {
-    icon = (const uint8_t*)pgm_read_word(&Entries[pageidx].IconData);
-    w = pgm_read_byte(&Entries[pageidx].IconWidth);
-    h = pgm_read_byte(&Entries[pageidx].IconHeight);
+  if (pageidx < R.page_entries->countof_Entries) {
+    icon = R.page_entries->Entries[pageidx].IconData;
+    w = R.page_entries->Entries[pageidx].IconWidth;
+    h = R.page_entries->Entries[pageidx].IconHeight;
   } else {
     icon = nullptr;
     w = h = 0;
@@ -98,10 +57,10 @@ static void get_category_name(uint8_t page_number, char *str) {
   uint8_t pageidx, catidx;
 
   pageidx = get_pageidx(page_number);
-  if (pageidx >= n_entry) {
+  if (pageidx >= R.page_entries->countof_Entries) {
     goto get_category_name_fail;
   }
-  catidx = pgm_read_byte(&Entries[pageidx].CategoryId);
+  catidx = R.page_entries->Entries[pageidx].CategoryId;
   if (catidx >= n_category) {
     goto get_category_name_fail;
   }
@@ -117,6 +76,15 @@ get_category_name_fail:
 
 void PageSelectPage::setup() {}
 void PageSelectPage::init() {
+  trig_interface.on();
+  md_prepare();
+  uint8_t _midi_lock_tmp = MidiUartParent::handle_midi_lock;
+  MidiUartParent::handle_midi_lock = 0;
+  R.Clear();
+  R.use_icons_page();
+  R.use_page_entries();
+  R.restore_page_entry_deps();
+
 #ifdef OLED_DISPLAY
   oled_display.clearDisplay();
   oled_display.fillRect(0, 0, 128, 7, WHITE);
@@ -135,48 +103,23 @@ void PageSelectPage::init() {
   classic_display = false;
 #endif
   loop_init = true;
+  // md_exploit.on(switch_tracks);
+  note_interface.state = true;
   // clear trigled so it's always sent on first run
   trigled_mask = 0;
   display();
+  MidiUartParent::handle_midi_lock = _midi_lock_tmp;
 }
 
 void PageSelectPage::md_prepare() {
-#ifndef USE_BLOCKINGKIT
   kit_cb.init();
-
-  MDSysexListener.addOnKitMessageCallback(
-      &kit_cb,
-      (md_callback_ptr_t)&MDBlockCurrentStatusCallback::onSysexReceived);
-#endif
-  if (MD.connected) {
-#ifdef USE_BLOCKINGKIT
-    MD.getBlockingKit(0x7F, CALLBACK_TIMEOUT);
-    if (MidiClock.state == 2) {
-      // Restore kit param values that are being modulaated by locks
-      mcl_seq.update_kit_params();
-    }
-#else
-    MD.requestKit(0x7F);
-    delay(20);
-#endif
-  }
+  auto listener = MD.getSysexListener();
+  listener->addOnKitMessageCallback(
+      &kit_cb, (sysex_callback_ptr_t)&MDCallback::onReceived);
+  MD.requestKit(0x7F);
 }
 
 void PageSelectPage::cleanup() {
-#ifndef USE_BLOCKINGKIT
-  uint16_t myclock = slowclock;
-  if (!loop_init) {
-    while (!kit_cb.received && (clock_diff(myclock, slowclock) < 400))
-      ;
-    if (kit_cb.received) {
-      MD.kit.fromSysex(MD.midi);
-      if (MidiClock.state == 2) {
-        mcl_seq.update_kit_params();
-      }
-    }
-  }
-  MDSysexListener.removeOnKitMessageCallback(&kit_cb);
-#endif
   note_interface.init_notes();
   MD.set_trigleds(0, TRIGLED_OVERLAY);
 }
@@ -201,7 +144,7 @@ uint8_t PageSelectPage::get_nextpage_up() {
 
 uint8_t PageSelectPage::get_nextpage_catdown() {
   auto page_id = get_pageidx(page_select);
-  auto cat_id = pgm_read_byte(&Entries[page_id].CategoryId);
+  auto cat_id = R.page_entries->Entries[page_id].CategoryId;
   if (cat_id > 0) {
     return pgm_read_byte(&Categories[cat_id - 1].FirstPage);
   } else {
@@ -211,7 +154,7 @@ uint8_t PageSelectPage::get_nextpage_catdown() {
 
 uint8_t PageSelectPage::get_nextpage_catup() {
   auto page_id = get_pageidx(page_select);
-  auto cat_id = pgm_read_byte(&Entries[page_id].CategoryId);
+  auto cat_id = R.page_entries->Entries[page_id].CategoryId;
   if (cat_id < n_category - 1) {
     return pgm_read_byte(&Categories[cat_id + 1].FirstPage);
   } else {
@@ -221,7 +164,7 @@ uint8_t PageSelectPage::get_nextpage_catup() {
 
 uint8_t PageSelectPage::get_category_page(uint8_t offset) {
   auto page_id = get_pageidx(page_select);
-  auto cat_id = pgm_read_byte(&Entries[page_id].CategoryId);
+  auto cat_id = R.page_entries->Entries[page_id].CategoryId;
   auto cat_start = pgm_read_byte(&Categories[cat_id].FirstPage);
   auto cat_size = pgm_read_byte(&Categories[cat_id].PageCount);
   if (offset >= cat_size) {
@@ -232,15 +175,15 @@ uint8_t PageSelectPage::get_category_page(uint8_t offset) {
 }
 
 void PageSelectPage::loop() {
-  if (loop_init) {
-    bool switch_tracks = false;
-    // md_exploit.off(switch_tracks);
-    trig_interface.on();
-    md_prepare();
-    // md_exploit.on(switch_tracks);
-    note_interface.state = true;
-    loop_init = false;
-  }
+  /*  if (loop_init) {
+      bool switch_tracks = false;
+      // md_exploit.off(switch_tracks);
+      trig_interface.on();
+      md_prepare();
+      // md_exploit.on(switch_tracks);
+      note_interface.state = true;
+      loop_init = false;
+    } */
 
   auto enc_ = (MCLEncoder *)encoders[0];
   int8_t diff = enc_->cur - enc_->old;
@@ -270,7 +213,7 @@ void PageSelectPage::loop() {
 void PageSelectPage::display() {
 #ifdef OLED_DISPLAY
   char str[16];
-  const uint8_t *icon;
+  uint8_t *icon;
   uint8_t iconw, iconh;
   uint8_t pageidx;
   uint8_t catidx;
@@ -279,8 +222,8 @@ void PageSelectPage::display() {
   get_page_icon(pageidx, icon, iconw, iconh);
   get_page(pageidx, str);
 
-  if (pageidx < n_entry) {
-    catidx = pgm_read_byte(&Entries[pageidx].CategoryId);
+  if (pageidx < R.page_entries->countof_Entries) {
+    catidx = R.page_entries->Entries[pageidx].CategoryId;
   } else {
     catidx = 0xFF;
   }
@@ -368,24 +311,38 @@ bool PageSelectPage::handleEvent(gui_event_t *event) {
 
     return true;
   }
+  if (EVENT_CMD(event)) {
+    uint8_t key = event->source - 64;
+    if (event->mask == EVENT_BUTTON_RELEASED) {
+      switch (key) {
+      case MDX_KEY_SONG: {
+        goto release;
+      }
+      }
+    } else {
+      switch (key) {
+      case MDX_KEY_NO: {
+        goto load_grid;
+      }
+      }
+    }
+  }
   if (EVENT_RELEASED(event, Buttons.BUTTON2)) {
+  release:
     LightPage *p;
     p = get_page(get_pageidx(page_select), nullptr);
     if (BUTTON_DOWN(Buttons.BUTTON1) || (!p)) {
       GUI.ignoreNextEvent(Buttons.BUTTON1);
-      trig_interface.off();
       //  md_exploit.off();
       GUI.setPage(&grid_page);
     } else {
-      MD.getCurrentTrack(CALLBACK_TIMEOUT);
-      last_md_track = MD.currentTrack;
       GUI.setPage(p);
     }
     return true;
   }
 
   if (EVENT_PRESSED(event, Buttons.BUTTON1)) {
-    trig_interface.off();
+  load_grid:
     GUI.ignoreNextEvent(event->source);
     GUI.setPage(&grid_page);
     return true;

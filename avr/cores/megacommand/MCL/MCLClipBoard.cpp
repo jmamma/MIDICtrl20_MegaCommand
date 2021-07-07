@@ -25,8 +25,8 @@ bool MCLClipBoard::open() {
     grid_filename[l] = '.';
     grid_filename[l + 1] = i + '0';
     grid_filename[l + 2] = '\0';
-    DEBUG_PRINTLN(F("Creating clipboard"));
     if (!SD.exists(grid_filename)) {
+      DEBUG_PRINTLN(F("Creating clipboard"));
       if (!grids[i].new_file(grid_filename)) {
         gfx.alert("ERROR", "SD ERROR");
         return false;
@@ -75,6 +75,7 @@ bool MCLClipBoard::copy_sequencer_track(uint8_t track) {
   EmptyTrack temp_track;
 
   MDTrack *md_track = (MDTrack *)(&temp_track);
+  ExtTrack *ext_track = (ExtTrack *)(&temp_track);
   uint8_t grid = 0;
 
   if (!open()) {
@@ -86,16 +87,17 @@ bool MCLClipBoard::copy_sequencer_track(uint8_t track) {
     memcpy(md_track->seq_data.data(), mcl_seq.md_tracks[track].data(),
            sizeof(md_track->seq_data));
     md_track->get_machine_from_kit(track);
-    md_track->chain.length = mcl_seq.md_tracks[track].length;
-    md_track->chain.speed = mcl_seq.md_tracks[track].speed;
+    md_track->link.length = mcl_seq.md_tracks[track].length;
+    md_track->link.speed = mcl_seq.md_tracks[track].speed;
     ret = grids[grid].write(&temp_track, sizeof(MDTrack), track, GRID_LENGTH);
   }
   else {
-    memcpy(&temp_track, &mcl_seq.ext_tracks[track - NUM_MD_TRACKS],
-           sizeof(ExtSeqTrackData));
-    temp_track.chain.length = mcl_seq.ext_tracks[track - NUM_MD_TRACKS].length;
-    temp_track.chain.speed = mcl_seq.ext_tracks[track -  NUM_MD_TRACKS].speed;
-    ret = grids[grid].write(&temp_track, sizeof(ExtSeqTrack), track, GRID_LENGTH);
+    uint8_t n = track - NUM_MD_TRACKS;
+    memcpy(ext_track->seq_data.data(), mcl_seq.ext_tracks[n].data(),
+           sizeof(ext_track->seq_data));
+    ext_track->link.length = mcl_seq.ext_tracks[n].length;
+    ext_track->link.speed = mcl_seq.ext_tracks[n].speed;
+    ret = grids[grid].write(&temp_track, sizeof(ExtTrack), track, GRID_LENGTH);
   }
   close();
   if (!ret) {
@@ -127,6 +129,8 @@ bool MCLClipBoard::paste_sequencer_track(uint8_t source_track, uint8_t track) {
 
   EmptyTrack temp_track;
   MDTrack *md_track = (MDTrack *)(&temp_track);
+  ExtTrack *ext_track = (ExtTrack *)(&temp_track);
+
   uint8_t grid = 0;
   if (!open()) {
     DEBUG_PRINTLN(F("error could not open clipboard"));
@@ -135,7 +139,7 @@ bool MCLClipBoard::paste_sequencer_track(uint8_t source_track, uint8_t track) {
   if (source_track < NUM_MD_TRACKS) {
     ret = grids[grid].read(&temp_track, sizeof(MDTrack), source_track, GRID_LENGTH);
   } else {
-    ret = grids[grid].read(&temp_track, sizeof(ExtSeqTrackData), source_track,
+    ret = grids[grid].read(&temp_track, sizeof(ExtTrack), source_track,
                     GRID_LENGTH);
   }
   if (!ret) {
@@ -148,8 +152,8 @@ bool MCLClipBoard::paste_sequencer_track(uint8_t source_track, uint8_t track) {
     memcpy(mcl_seq.md_tracks[track].data(), md_track->seq_data.data(),
            sizeof(md_track->seq_data));
 
-    mcl_seq.md_tracks[track].length = md_track->chain.length;
-    mcl_seq.md_tracks[track].speed = md_track->chain.speed;
+    mcl_seq.md_tracks[track].set_length(md_track->link.length);
+    mcl_seq.md_tracks[track].set_speed(md_track->link.speed);
 
     if (md_track->machine.trigGroup == source_track) {
       md_track->machine.trigGroup = 255;
@@ -161,17 +165,16 @@ bool MCLClipBoard::paste_sequencer_track(uint8_t source_track, uint8_t track) {
       md_track->machine.lfo.destinationTrack = track;
     }
     DEBUG_PRINTLN(F("sending seq track"));
-    bool send_machine = true, send_level = true;
+    bool send_machine = true;
+    bool send_level = true;
     MD.sendMachine(track, &(md_track->machine), send_level, send_machine);
   }
-#ifdef EXT_TRACKS
-  else if (track >= NUM_MD_TRACKS) {
-    memcpy(&mcl_seq.ext_tracks[track - NUM_MD_TRACKS], &(temp_track),
-           sizeof(ExtSeqTrackData));
-    mcl_seq.ext_tracks[track - NUM_MD_TRACKS].length = temp_track.chain.length;
-    mcl_seq.ext_tracks[track - NUM_MD_TRACKS].speed = temp_track.chain.speed;
+  else {
+    memcpy(mcl_seq.ext_tracks[track - NUM_MD_TRACKS].data(), ext_track->seq_data.data(),
+           sizeof(ext_track->seq_data));
+    mcl_seq.ext_tracks[track - NUM_MD_TRACKS].length = ext_track->link.length;
+    mcl_seq.ext_tracks[track - NUM_MD_TRACKS].speed = ext_track->link.speed;
   }
-#endif
   close();
   return true;
 }
@@ -227,7 +230,7 @@ bool MCLClipBoard::paste(uint16_t col, uint16_t row, uint8_t grid) {
   GridRowHeader header;
   GridRowHeader header_copy;
 
-  uint8_t grid_idx, track_idx, track_type, dev_idx;
+  uint8_t track_idx, dev_idx;
   for (int y = 0; y < t_h && y + row < GRID_LENGTH; y++) {
     proj.select_grid(grid);
     proj.read_grid_row_header(&header, y + row);
@@ -249,22 +252,22 @@ bool MCLClipBoard::paste(uint16_t col, uint16_t row, uint8_t grid) {
 
       DeviceTrack *ptrack = ((DeviceTrack*) &empty_track)->init_track_type(empty_track.active);
       DEBUG_DUMP(ptrack->active);
-      SeqTrack *seq_track = mcl_actions.get_dev_slot_info(
-          slot_n, &grid_idx, &track_idx, &track_type, &dev_idx);
 
-      if (track_type != ptrack->active)
+      GridDeviceTrack *gdt = mcl_actions.get_grid_dev_track(slot_n, &track_idx, &dev_idx);
+
+      if (gdt != nullptr && gdt->track_type != ptrack->active)
         //Don't allow paste in to unsupported slots
         continue;
 
-      int16_t chain_row_offset = ptrack->chain.row - t_row;
+      int16_t link_row_offset = ptrack->link.row - t_row;
 
-      uint8_t new_chain_row = row + chain_row_offset;
-      if (new_chain_row >= GRID_LENGTH) {
-        new_chain_row = y + row;
-      } else if (new_chain_row < 0) {
-        new_chain_row = y + row;
+      uint8_t new_link_row = row + link_row_offset;
+      if (new_link_row >= GRID_LENGTH) {
+        new_link_row = y + row;
+      } else if (new_link_row < 0) {
+        new_link_row = y + row;
       }
-      ptrack->chain.row = new_chain_row;
+      ptrack->link.row = new_link_row;
       header.update_model(d_col, ptrack->get_model(),
                           ptrack->get_device_type());
       ptrack->on_copy(s_col, d_col, destination_same);

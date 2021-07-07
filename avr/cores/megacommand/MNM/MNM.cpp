@@ -1,4 +1,5 @@
 #include "MCL_impl.h"
+#include "ResourceManager.h"
 
 const ElektronSysexProtocol mnm_protocol = {
     monomachine_sysex_hdr,
@@ -28,10 +29,9 @@ const ElektronSysexProtocol mnm_protocol = {
 };
 
 MNMClass::MNMClass()
-    : ElektronDevice(&Midi2, "MM", DEVICE_MNM, icon_mnm, mnm_protocol) {
+    : ElektronDevice(&Midi2, "MM", DEVICE_MNM, mnm_protocol) {
   global.baseChannel = 0;
   midiuart = &MidiUart2;
-  init_grid_devices();
 }
 
 void MNMClass::init_grid_devices() {
@@ -94,12 +94,17 @@ bool MNMClass::probe() {
     setStatus(0x21, currentAudioMidiMode);
 
     loadGlobal(7);
-
     return MNM.connected;
   }
 
   return false;
 }
+
+// Caller is responsible to make sure icons_device is loaded in RM
+uint8_t* MNMClass::icon() {
+  return R.icons_device->icon_mnm;
+}
+
 
 void MNMClass::sendNoteOn(uint8_t track, uint8_t note, uint8_t velocity) {
   midiuart->sendNoteOn(track + global.baseChannel, note, velocity);
@@ -310,7 +315,7 @@ void MNMClass::updateKitParams() {
   }
 }
 
-uint16_t MNMClass::sendKitParams(uint8_t *masks, void *scratchpad) {
+uint16_t MNMClass::sendKitParams(uint8_t *masks) {
   DEBUG_PRINT_FN();
   /// Ignores masks and scratchpad, and send the whole kit.
   auto kit_pos = getCurrentKit();

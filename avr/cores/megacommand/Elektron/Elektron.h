@@ -30,7 +30,7 @@ typedef struct model_param_name_s {
 /** Data structure holding the parameter names for a machine model. **/
 typedef struct model_to_param_names_s {
   uint8_t model;
-  const model_param_name_t *names;
+  uint16_t offset; // offset of the first param in the lookup table
 } model_to_param_names_t;
 
 typedef struct short_machine_name_s {
@@ -140,27 +140,37 @@ class GridDeviceTrack {
 public:
   uint8_t slot_number;
   uint8_t track_type;
-  bool is_aux;
+  uint8_t group_type;
+  uint8_t mem_slot_idx;
   SeqTrack *seq_track;
   uint8_t get_slot_number() { return slot_number; }
   SeqTrack *get_seq_track() { return seq_track; }
 };
+
+#define GROUP_DEV 0
+#define GROUP_AUX 1
+#define GROUP_TEMPO 2
 
 class GridDevice {
 public:
   uint8_t num_tracks;
   uint8_t get_num_tracks() { return num_tracks; }
 
-  GridDeviceTrack tracks[NUM_SLOTS];
+  GridDeviceTrack tracks[GRID_WIDTH];
 
   GridDevice() { init(); }
 
   void init() { num_tracks = 0; }
-  void add_track(uint8_t track_idx, uint8_t slot_number, SeqTrack *seq_track, uint8_t track_type, bool is_aux = false) {
+
+  void add_track(uint8_t track_idx, uint8_t slot_number, SeqTrack *seq_track, uint8_t track_type, uint8_t group_type = GROUP_DEV, uint8_t mem_slot_idx = 255) {
     tracks[track_idx].slot_number = slot_number;
     tracks[track_idx].seq_track = seq_track;
     tracks[track_idx].track_type = track_type;
-    tracks[track_idx].is_aux = is_aux;
+    tracks[track_idx].mem_slot_idx = mem_slot_idx;
+    if (mem_slot_idx == 255) {
+    tracks[track_idx].mem_slot_idx = track_idx;
+    }
+    tracks[track_idx].group_type = group_type;
     num_tracks++;
   }
 };
@@ -172,23 +182,27 @@ public:
   MidiUartParent* uart;
   const char* const name;
   const uint8_t id; // Device identifier
-  const uint8_t* const icon;
   const bool isElektronDevice;
 
   GridDevice grid_devices[NUM_GRIDS];
 
-  MidiDevice(MidiClass* _midi, const char* _name, const uint8_t _id, const uint8_t* _icon, const bool _isElektronDevice)
-    : name(_name), id(_id), icon(_icon), isElektronDevice(_isElektronDevice)
+  MidiDevice(MidiClass* _midi, const char* _name, const uint8_t _id, const bool _isElektronDevice)
+    : name(_name), id(_id), isElektronDevice(_isElektronDevice)
   {
     midi = _midi;
     uart = midi ? midi->uart : nullptr;
     connected = false;
   }
 
-  void add_track_to_grid(uint8_t grid_idx, uint8_t track_idx, SeqTrack *seq_track, uint8_t track_type, bool is_aux = false) {
-    auto *devp = &grid_devices[grid_idx];
-    devp->add_track(track_idx, track_idx + grid_idx * GRID_WIDTH, seq_track, track_type, is_aux);
+  void cleanup() {
+    memset(grid_devices,0, sizeof(GridDevice) * NUM_GRIDS);
   }
+
+  void add_track_to_grid(uint8_t grid_idx, uint8_t track_idx, SeqTrack *seq_track, uint8_t track_type, uint8_t group_type = GROUP_DEV, uint8_t mem_slot_idx = 255) {
+    auto *devp = &grid_devices[grid_idx];
+    devp->add_track(track_idx, track_idx + grid_idx * GRID_WIDTH, seq_track, track_type, group_type, mem_slot_idx);
+  }
+
   ElektronDevice* asElektronDevice() {
     if (!isElektronDevice) return nullptr;
     return (ElektronDevice*) this;
@@ -196,8 +210,12 @@ public:
 
   virtual void init_grid_devices() {};
 
-  virtual void disconnect() { connected = false; }
+  virtual void setup() { };
+
+  virtual void disconnect() { cleanup(); connected = false; }
   virtual bool probe() = 0;
+  // 34x42 bitmap icon of the device
+  virtual uint8_t *icon() { return nullptr; }
 };
 
 /// Base class for Elektron sysex listeners
@@ -276,13 +294,14 @@ public:
 enum TrigLEDMode {
   TRIGLED_OVERLAY = 0,
   TRIGLED_STEPEDIT = 1,
-  TRIGLED_EXCLUSIVE = 2
+  TRIGLED_EXCLUSIVE = 2,
+  TRIGLED_EXCLUSIVENDYNAMIC = 3
 };
 
 /// sysex constants for constructing data frames
 class ElektronSysexProtocol {
 public:
-  const uint8_t* const header;
+  uint8_t* const header;
   const size_t header_size;
 
   const uint8_t kitrequest_id;
@@ -323,14 +342,21 @@ public:
   virtual uint16_t toSysex(ElektronDataToSysexEncoder *encoder) = 0;
 };
 
-/// !Note, should be synced with fw.c
-#define FW_CAP(x) (1 << x)
+#define FW_CAP_LOW(x) (1 << x)
+#define FW_CAP_HIGH(x) (FW_CAP_LOW(x + 8))
 
-//#define FW_CAP_DEBUG          FW_CAP(0)
-#define FW_CAP_TRIG_INTERFACE FW_CAP(1)
-#define FW_CAP_MUTE_STATE     FW_CAP(2)
-#define FW_CAP_SAMPLE         FW_CAP(3)
-#define FW_CAP_TRIG_LEDS      FW_CAP(4)
+ //#define FW_CAP_DEBUG        FW_CAP_LOW(0)
+#define FW_CAP_TRIG_INTERFACE FW_CAP_LOW(1)
+#define FW_CAP_MUTE_STATE     FW_CAP_LOW(2)
+#define FW_CAP_SAMPLE         FW_CAP_LOW(3)
+#define FW_CAP_TRIG_LEDS      FW_CAP_LOW(4)
+#define FW_CAP_KIT_WORKSPACE  FW_CAP_LOW(5)
+#define FW_CAP_MASTER_FX      FW_CAP_LOW(6)
+
+#define FW_CAP_UNDOKIT_SYNC   FW_CAP_HIGH(0)
+#define FW_CAP_TONAL          FW_CAP_HIGH(1)
+#define FW_CAP_ENHANCED_GUI FW_CAP_HIGH(2)
+#define FW_CAP_ENHANCED_MIDI FW_CAP_HIGH(3)
 
 /// Base class for Elektron MidiDevice
 class ElektronDevice : public MidiDevice {
@@ -338,23 +364,27 @@ public:
   const ElektronSysexProtocol sysex_protocol;
 
   /// Runtime variables
-  uint64_t fw_caps;
+  uint16_t fw_caps;
   /** Stores the current global of the MD, usually set by the MDTask. **/
-  int currentGlobal;
+  uint8_t currentGlobal;
   /** Stores the current kit of the MD, usually set by the MDTask. **/
-  int currentKit;
-  int currentTrack;
+  uint8_t currentKit;
+
+  uint8_t currentTrack;
+  uint8_t currentSynthPage;
+
+  uint8_t currentBank;
   /** Stores the current pattern of the MD, usually set by the MDTask. **/
-  int currentPattern;
+  uint8_t currentPattern;
   /** Set to true if the kit was loaded (usually set by MDTask). **/
   bool loadedKit;
   /** Set to true if the global was loaded (usually set by MDTask). **/
   bool loadedGlobal;
 
   ElektronDevice(
-      MidiClass* _midi, const char* _name, const uint8_t _id, const uint8_t* _icon,
+      MidiClass* _midi, const char* _name, const uint8_t _id,
       const ElektronSysexProtocol& protocol)
-    : MidiDevice(_midi, _name, _id, _icon, true), sysex_protocol(protocol) {
+    : MidiDevice(_midi, _name, _id, true), sysex_protocol(protocol) {
 
       currentGlobal = -1;
       currentKit = -1;
@@ -365,6 +395,12 @@ public:
     }
 
   virtual bool canReadWorkspaceKit() {
+    // TODO fw cap for live kit access
+    //return fw_caps & FW_CAP
+    return false;
+  }
+
+  virtual bool canReadKit() {
     // TODO fw cap for live kit access
     //return fw_caps & FW_CAP
     return false;
@@ -386,28 +422,52 @@ public:
    * Caller provides a scratchpad buffer (for example, EmptyTrack*).
    * Returns the estimated latency for kit sending.
    **/
-  virtual uint16_t sendKitParams(uint8_t* send_mask, void* scratch_buf) { return 0; }
+  virtual uint16_t sendKitParams(uint8_t* send_mask) { return 0; }
   /**
    * Return a pointer to a program-space string representing the name of the
    *given machine.
    **/
-  virtual PGM_P getMachineName(uint8_t machine) { return nullptr; }
+  virtual const char* getMachineName(uint8_t machine) { return nullptr; }
 
   bool get_fw_caps();
 
+  void activate_encoder_interface(uint8_t *params);
+  void deactivate_encoder_interface();
+
+  void activate_enhanced_gui();
+  void deactivate_enhanced_gui();
+
+  void activate_enhanced_midi();
+  void deactivate_enhanced_midi();
+
+  void set_seq_page(uint8_t page);
+
+  void set_rec_mode(uint8_t mode);
+
+  void popup_text(uint8_t action_string, uint8_t persistent = 0);
+  void popup_text(char *str, uint8_t persistent = 0);
+
+  void draw_bank(uint8_t bank);
+  void draw_close_bank();
+
+  void draw_close_microtiming();
+  void draw_microtiming(uint8_t speed, uint8_t timing);
+  void draw_pattern_idx(uint8_t idx, uint8_t idx_other, uint8_t chain_mask);
   void activate_trig_interface();
   void deactivate_trig_interface();
 
   void activate_track_select();
   void deactivate_track_select();
-  void set_trigleds(uint16_t bitmask, TrigLEDMode mode);
+  void set_trigleds(uint16_t bitmask, TrigLEDMode mode, uint8_t blink = 0);
+  void set_key_repeat(uint8_t mode);
 
+  void undokit_sync();
   /**
    * Send a sysex request to the device. All the request calls
    * are wrapped in appropriate methods like requestKit,
    * requestPattern, etc...
    **/
-  virtual uint16_t sendRequest(uint8_t *data, uint8_t len, bool send = true);
+  virtual uint16_t sendRequest(uint8_t *data, uint8_t len, bool send = true, MidiUartParent *uart_ = nullptr);
   virtual uint16_t sendRequest(uint8_t type, uint8_t param, bool send = true);
   /**
    * Wait for a blocking answer to a status request. Timeout is in clock ticks.
@@ -512,6 +572,9 @@ public:
 
 };
 
-extern PGM_P getMachineNameShort(uint8_t machine, uint8_t type, const short_machine_name_t* table, size_t size);
+extern const char* getMachineNameShort(uint8_t machine, uint8_t type, const short_machine_name_t* table, size_t size);
+#define copyMachineNameShort(src, dst) \
+  (dst)[0] = (src)[0]; \
+  (dst)[1] = (src)[1];
 
 #endif /* ELEKTRON_H__ */

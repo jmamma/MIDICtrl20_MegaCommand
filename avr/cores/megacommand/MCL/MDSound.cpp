@@ -17,7 +17,7 @@ bool MDSound::read_sound() {
 bool MDSound::fetch_sound(uint8_t track) {
   DEBUG_PRINT_FN();
   machine_count = 0;
-  machine1.model = MD.kit.models[track];
+  machine1.model = MD.kit.models[track]; //get raw model including tonal bit
   machine1.level = MD.kit.levels[track];
   memcpy(&machine1.params, &(MD.kit.params[track]), 24);
   memcpy(&machine1.lfo, &(MD.kit.lfos[track]), sizeof(MDLFO));
@@ -39,7 +39,7 @@ bool MDSound::fetch_sound(uint8_t track) {
   // If track uses trigGroup, assume sound is made up of two models.
 
   if ((trigGroup < 16) && (trigGroup != track)) {
-    machine2.model = MD.kit.models[trigGroup];
+    machine2.model = MD.kit.models[trigGroup]; //get raw model including tonal bit
     machine2.level = MD.kit.levels[trigGroup];
     memcpy(&machine2.params, &(MD.kit.params[trigGroup]), 24);
     memcpy(&machine2.lfo, &(MD.kit.lfos[trigGroup]), sizeof(MDLFO));
@@ -66,10 +66,9 @@ bool MDSound::load_sound(uint8_t track) {
 
   DEBUG_PRINTLN(machine1.model);
 #ifdef DEBUG_MODE
-  PGM_P tmp;
   char str[3] = "  ";
-  tmp = getMDMachineNameShort(machine1.model, 2);
-  m_strncpy_p(str, tmp, 3);
+  const char* tmp = getMDMachineNameShort(machine1.model, 2);
+  copyMachineNameShort(tmp, str);
   DEBUG_PRINTLN(str);
 #endif
 
@@ -78,7 +77,7 @@ bool MDSound::load_sound(uint8_t track) {
 #ifdef DEBUG_MODE
     DEBUG_PRINTLN(F("loading second machine"));
     tmp = getMDMachineNameShort(machine2.model, 2);
-    m_strncpy_p(str, tmp, 3);
+    copyMachineNameShort(tmp, str);
     DEBUG_PRINTLN(str);
 #endif
     if (machine2.lfo.destinationTrack < 16) {

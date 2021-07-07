@@ -14,23 +14,6 @@
 /** Standard elektron sysex header for communicating with the machinedrum. **/
 extern uint8_t machinedrum_sysex_hdr[5];
 
-/** This structure stores the tuning information of a melodic machine on the
- * machinedrum. **/
-typedef struct tuning_s {
-
-  /** Model of the melodic machine. **/
-  uint8_t model;
-  /** Base pitch of the melodic machine. **/
-  uint8_t base;
-  /** Length of the tuning array storing the pitch values for each pitch. **/
-  uint8_t len;
-  uint8_t offset;
-  /** Pointer to an array for pitch values for individual midi notes. **/
-  const uint8_t *tuning;
-
-  /* @} */
-} tuning_t;
-
 class MDMidiEvents : public MidiCallback {
 public:
   bool kitupdate_state;
@@ -59,7 +42,7 @@ public:
  * It also incorporates the mechanics to produce notes on the
  * MachineDrum by doing lookups of pitch information.
  **/
-class MDClass: public ElektronDevice {
+class MDClass : public ElektronDevice {
 
 public:
   MDClass();
@@ -69,7 +52,7 @@ public:
   MDPattern pattern;
 
   uint16_t mute_mask;
-  //uint32_t swing_last;
+  // uint32_t swing_last;
 
   /**
    * Stores the global settings of the machinedrum (usually set by MDTask).
@@ -77,21 +60,33 @@ public:
    * This is used by most methods of the MDClass because they look up
    * the channel settings and the trigger settings of the MachineDrum.
    **/
-  MDGlobal global;
+  MDGlobalLight global;
 
   virtual bool probe();
+  virtual void setup();
   virtual void init_grid_devices();
+  virtual uint8_t* icon();
 
   // TODO not necessary if we have FW_CAP_READ_LIVE_KIT
   virtual bool canReadWorkspaceKit() { return true; }
-  virtual ElektronSysexObject* getKit() { return &kit; }
-  virtual ElektronSysexObject* getPattern() { return &pattern; }
-  virtual ElektronSysexObject* getGlobal() { return &global; }
-  virtual ElektronSysexListenerClass* getSysexListener() { return &MDSysexListener; }
+  virtual bool canReadKit() { return true; }
 
+  virtual ElektronSysexObject *getKit() { return &kit; }
+  virtual ElektronSysexObject *getPattern() { return &pattern; }
+  virtual ElektronSysexObject *getGlobal() { return nullptr; }
+  virtual ElektronSysexListenerClass *getSysexListener() {
+    return &MDSysexListener;
+  }
+
+  //Global config
+  void setBaseChannel(uint8_t channel);
+  void setLocalOn(bool localOn);
+  void setProgramChange(uint8_t val);
+  void setExternalSync();
+  //---
   virtual void updateKitParams();
-  virtual uint16_t sendKitParams(uint8_t* mask, void*);
-  virtual PGM_P getMachineName(uint8_t machine);
+  virtual uint16_t sendKitParams(uint8_t *mask);
+  virtual const char* getMachineName(uint8_t machine);
 
   /**
    * When given the channel and the cc of an incoming CC messages,
@@ -115,7 +110,7 @@ public:
    *
    * track goes from 0 to 15, velocity from 0 to 127.
    **/
-  void triggerTrack(uint8_t track, uint8_t velocity);
+  void triggerTrack(uint8_t track, uint8_t velocity, MidiUartParent *uart_ = nullptr);
   /**
    * Set the parameter param (0 to 23, or 32 for mute, and 33 for
    * LEVEL) of the given track (from 0 to 15) to value.
@@ -123,8 +118,8 @@ public:
    * Uses the channel settings out of the global settings.
    **/
 
-  ALWAYS_INLINE() void setTrackParam_inline(uint8_t track, uint8_t param, uint8_t value);
-  void setTrackParam(uint8_t track, uint8_t param, uint8_t value);
+  ALWAYS_INLINE() void setTrackParam_inline(uint8_t track, uint8_t param, uint8_t value, MidiUartParent *uart_ = nullptr);
+  void setTrackParam(uint8_t track, uint8_t param, uint8_t value, MidiUartParent *uart_ = nullptr);
 
   void setSampleName(uint8_t slot, char *name);
 
@@ -136,9 +131,20 @@ public:
    * - MD_SET_EQ_PARAM_ID
    * - MD_SET_DYNAMIX_PARAM_ID
    **/
-  uint8_t sendFXParam(uint8_t param, uint8_t value, uint8_t type, bool send = true);
+
+  // Send multiple values simultaneously (single sysex message);
+  uint8_t sendFXParamsBulk(uint8_t *values, bool send = true);
+  uint8_t sendFXParams(uint8_t *values, uint8_t type, bool send = true);
+
+  uint8_t setEchoParams(uint8_t *values, bool send = true);
+  uint8_t setReverbParams(uint8_t *values, bool send = true);
+  uint8_t setEQParams(uint8_t *values, bool send = true);
+  uint8_t setCompressorParams(uint8_t *values, bool send = true);
+
+  uint8_t sendFXParam(uint8_t param, uint8_t value, uint8_t type,
+                      bool send = true);
   /** Set the value of an ECHO FX parameter. **/
-  uint8_t setEchoParam(uint8_t param, uint8_t value,bool send = true);
+  uint8_t setEchoParam(uint8_t param, uint8_t value, bool send = true);
   /** Set the value of a REVERB FX parameter. **/
   uint8_t setReverbParam(uint8_t param, uint8_t value, bool send = true);
   /** Set the value of an EQ FX parameter. **/
@@ -181,7 +187,8 @@ public:
    * the global variable.
    **/
   void sendNoteOn(uint8_t track, uint8_t pitch, uint8_t velocity);
-
+  void parallelTrig(uint16_t mask, MidiUartParent *uart_ = nullptr);
+  void sync_seqtrack(uint8_t length, uint8_t speed, uint8_t step_count, MidiUartParent *uart_ = nullptr);
   /**
    * Slice the track (assuming it's a ROM or RAM-P machine) on the
    * given 32th, assuming that the loaded sample is 2 bars long.
@@ -200,7 +207,11 @@ public:
   /**
    * Get the tuning information of the given model.
    **/
-  const tuning_t *getModelTuning(uint8_t model);
+  const tuning_t *getModelTuning(uint8_t model, bool tonal = false);
+
+  const tuning_t *getKitModelTuning(uint8_t track) {
+    return getModelTuning(kit.get_model(track),kit.get_tonal(track));
+  }
   /**
    * Lookup the given pitch in the global track trigger settings, and returns
    *the track mapped to the give note. Returns 128 if no track could be found.
@@ -225,7 +236,7 @@ public:
    * Send a sysex machine to change the model of the machine on the given track.
    **/
   void assignMachine(uint8_t track, uint8_t model, uint8_t init = 255);
-
+  uint8_t assignMachineBulk(uint8_t track, MDMachine *machine, uint8_t send_level, uint8_t mode = 255, bool send = true);
   /**
    * Load the given machine (including parameters) on the given track
    * out of the machine structure.
@@ -236,18 +247,19 @@ public:
   void setMachine(uint8_t track, MDMachine *machine);
 
   /**
-   * Load machine, but only send parameters that differ from MD.kit, returns total bytes sent
-   * if send == false, then only return the byte count, don't send.
-   * if send == true, send parameters to MD, insert machine in kit.
+   * Load machine, but only send parameters that differ from MD.kit, returns
+   *total bytes sent if send == false, then only return the byte count, don't
+   *send. if send == true, send parameters to MD, insert machine in kit.
    **/
-  uint8_t sendMachine(uint8_t track, MDMachine *machine, bool send_level, bool send);
+  uint8_t sendMachine(uint8_t track, MDMachine *machine, bool send_level,
+                      bool send = true);
 
   /**
    * Inserts a machine in to the MDKit object
    **/
 
   void insertMachineInKit(uint8_t track, MDMachine *machine,
-                                bool set_level = true);
+                          bool set_level = true);
   /**
    * Mute/unmute the given track (0 to 15) by sending a CC
    * message. This uses the global channel settings.
@@ -277,6 +289,7 @@ public:
   /**
    * Send a sysex message to route the track (0 to 15) to the given output.
    **/
+  uint8_t setTrackRoutings(uint8_t *values, bool send = true);
   uint8_t setTrackRouting(uint8_t track, uint8_t output, bool send = true);
 
   /**

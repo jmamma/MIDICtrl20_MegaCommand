@@ -7,7 +7,6 @@
 
 #define MIDIDUINO 1
 #define SYSEX_BUF_SIZE 6000
-//#define SYSEX_BUF_SIZE 128
 
 #include "wiring_private.h"
 
@@ -28,16 +27,15 @@
 #define DEBUG_PRINT(x)  Serial.print(x)
 #define DEBUG_PRINTLN(x)  Serial.println(x)
 #define DEBUG_DUMP(x)  { \
-  Serial.print(F(#x)); \
-  Serial.print(F(" = ")); \
-  Serial.println(x); \
 }
 // __PRETTY_FUNCTION__ is a gcc extension
-#define DEBUG_PRINT_FN(x) { \
-  DEBUG_PRINT(F("func_call: ")); \
-  Serial.println(__PRETTY_FUNCTION__); \
-}
-//#define DEBUG_PRINT_FN(x)
+// #define DEBUG_PRINT_FN(x) { \
+//   DEBUG_PRINT(F("func_call: ")); \
+//   Serial.println(__PRETTY_FUNCTION__); \
+// }
+//
+#define DEBUG_CHECK_STACK() { if ((int) SP < 512) { setLed2(); setLed(); while (1); } }
+#define DEBUG_PRINT_FN(x)
 
 #else
 #define DEBUG_INIT()
@@ -45,6 +43,7 @@
 #define DEBUG_PRINTLN(x)
 #define DEBUG_DUMP(x)
 #define DEBUG_PRINT_FN(x)
+#define DEBUG_CHECK_STACK()
 #endif
 
 #ifdef __cplusplus
@@ -85,7 +84,6 @@ extern "C" {
 #include "Midi.h"
 #include "WMath.h"
 #endif
-
 
 extern uint32_t write_count;
 extern uint32_t write_count_time;

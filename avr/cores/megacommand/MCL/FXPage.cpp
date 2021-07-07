@@ -1,4 +1,5 @@
 #include "MCL_impl.h"
+#include "ResourceManager.h"
 
 #define FX_TYPE 0
 #define FX_PARAM 1
@@ -14,6 +15,10 @@ void FXPage::init() {
 #endif
   trig_interface.off();
   update_encoders();
+
+  R.Clear();
+  R.use_icons_page();
+  R.use_machine_param_names();
 }
 void FXPage::update_encoders() {
 
@@ -116,7 +121,7 @@ void FXPage::display() {
     uint8_t fx_type = params[n].type;
     GUI.setLine(GUI.LINE1);
     param_name = fx_param_name(fx_type, fx_param);
-    m_strncpy_p(str, param_name, 4);
+    strncpy(str, param_name, 4);
 
     GUI.put_string_at(i * 4, str);
 
@@ -131,10 +136,10 @@ void FXPage::display() {
   auto oldfont = oled_display.getFont();
 
   if (page_id == 0) {
-  oled_display.drawBitmap(0, 0, icon_rhytmecho, 24, 18, WHITE);
+  oled_display.drawBitmap(0, 0, R.icons_page->icon_rhytmecho, 24, 18, WHITE);
   }
   else {
-  oled_display.drawBitmap(0, 0, icon_gatebox, 24, 18, WHITE);
+  oled_display.drawBitmap(0, 0, R.icons_page->icon_gatebox, 24, 18, WHITE);
   }
   mcl_gui.draw_knob_frame();
 
@@ -144,7 +149,7 @@ void FXPage::display() {
     uint8_t fx_param = params[n].param;
     uint8_t fx_type = params[n].type;
     param_name = fx_param_name(fx_type, fx_param);
-    m_strncpy_p(str, param_name, 4);
+    strncpy(str, param_name, 4);
 
     mcl_gui.draw_knob(i, encoders[i], str);
   //  mcl_gui.draw_light_encoder(30 + 20 * i, 18, encoders[i], str);

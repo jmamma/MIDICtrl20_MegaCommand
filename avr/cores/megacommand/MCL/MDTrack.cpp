@@ -19,6 +19,7 @@ void MDTrack::transition_send(uint8_t tracknumber, uint8_t slotnumber) {
   DEBUG_DUMP(n);
   switch (mcl_actions.transition_level[n]) {
   case 1:
+    DEBUG_PRINTLN("setting transition level to 0");
     send_level = true;
     machine.level = 0;
     break;
@@ -33,6 +34,7 @@ void MDTrack::transition_send(uint8_t tracknumber, uint8_t slotnumber) {
   default:
     break;
   }
+
   bool send = true;
   MD.sendMachine(tracknumber, &(machine), send_level, send);
 }
@@ -55,7 +57,7 @@ void MDTrack::get_machine_from_kit(uint8_t tracknumber) {
 
   machine.track = tracknumber;
   machine.level = MD.kit.levels[tracknumber];
-  machine.model = MD.kit.models[tracknumber];
+  machine.model = MD.kit.models[tracknumber]; //get_raw_model including tonal bit
 
   /*Check to see if LFO is modulating host track*/
   /*IF it is then we need to make sure that the LFO destination is updated to
@@ -71,6 +73,7 @@ void MDTrack::get_machine_from_kit(uint8_t tracknumber) {
 
   machine.trigGroup = MD.kit.trigGroups[tracknumber];
   machine.muteGroup = MD.kit.muteGroups[tracknumber];
+
 }
 
 void MDTrack::init() {
@@ -82,12 +85,7 @@ void MDTrack::load_seq_data(SeqTrack *seq_track) {
   MDSeqTrack *md_seq_track = (MDSeqTrack *)seq_track;
 
   memcpy(md_seq_track->data(), seq_data.data(), sizeof(seq_data));
-  md_seq_track->speed = chain.speed;
-  md_seq_track->length = chain.length;
-  if (md_seq_track->speed < SEQ_SPEED_1X) {
-    md_seq_track->speed = SEQ_SPEED_1X;
-    md_seq_track->clear_slide_data();
-  }
+  load_link_data(seq_track);
   md_seq_track->oneshot_mask = 0;
   md_seq_track->set_length(md_seq_track->length);
   md_seq_track->update_params();
@@ -96,7 +94,7 @@ void MDTrack::load_seq_data(SeqTrack *seq_track) {
 void MDTrack::scale_seq_vol(float scale) {
   for (uint8_t n = 0; n < NUM_MD_STEPS; n++) {
     auto idx = seq_data.get_lockidx(n);
-    for (uint8_t c = 0; c < NUM_MD_LOCKS; c++) {
+    for (uint8_t c = 0; c < NUM_LOCKS; c++) {
       if (seq_data.steps[n].is_lock(c)) {
         if ((seq_data.locks_params[c] == MODEL_LFOD + 1) ||
             (seq_data.locks_params[c] == MODEL_VOL + 1)) {
@@ -136,26 +134,27 @@ bool MDTrack::store_in_grid(uint8_t column, uint16_t row, SeqTrack *seq_track,
 
   if (column != 255 && online == true) {
     get_machine_from_kit(column);
-
-    chain.length = seq_track->length;
-    chain.speed = seq_track->speed;
+    DEBUG_DUMP("online");
+    link.length = seq_track->length;
+    link.speed = seq_track->speed;
 
     if (merge > 0) {
       DEBUG_PRINTLN(F("auto merge"));
       MDSeqTrack temp_seq_track;
+      temp_seq_track.init();
       if (merge == SAVE_MERGE) {
         // Load up internal sequencer data
         memcpy(temp_seq_track.data(), md_seq_track->data(),
                sizeof(MDSeqTrackData));
       }
       if (merge == SAVE_MD) {
-        temp_seq_track.init();
-        chain.length = MD.pattern.patternLength;
-        chain.speed = SEQ_SPEED_1X + MD.pattern.doubleTempo;
-        temp_seq_track.length = chain.length;
-        temp_seq_track.speed = chain.speed;
+        link.length = MD.pattern.patternLength;
+        link.speed = SEQ_SPEED_1X + MD.pattern.doubleTempo;
         DEBUG_PRINTLN(F("SAVE_MD"));
       }
+      temp_seq_track.length = link.length;
+      temp_seq_track.speed = link.speed;
+
       // merge md pattern data with seq_data
       temp_seq_track.merge_from_md(column, &(MD.pattern));
       // copy merged data in to this track object's seq data for writing to SD
@@ -180,7 +179,7 @@ bool MDTrack::store_in_grid(uint8_t column, uint16_t row, SeqTrack *seq_track,
     DEBUG_PRINTLN(F("write failed"));
     return false;
   }
-  DEBUG_DUMP(chain.length);
+  DEBUG_DUMP(link.length);
   DEBUG_PRINTLN(F("Track stored in grid"));
   DEBUG_PRINT(column);
   DEBUG_PRINT(F(" "));

@@ -1,9 +1,12 @@
 #include "MCL_impl.h"
+#include "ResourceManager.h"
 
 void RoutePage::setup() {}
 void RoutePage::init() {
   hasChanged = false;
   note_interface.state = true;
+  R.Clear();
+  R.use_icons_page();
 }
 void RoutePage::cleanup() { note_interface.state = false; }
 void RoutePage::set_level(int curtrack, int value) {
@@ -31,7 +34,7 @@ void RoutePage::draw_routes() {
       auto x = MCLGUI::seq_x0 + i * (MCLGUI::seq_w + 1);
       oled_display.setCursor(x + 1, MCLGUI::trig_y + 5);
 
-      if (note_interface.notes[i] > 0 && note_interface.notes[i] != 3) {
+      if (note_interface.is_note_on(i)) {
         oled_display.fillRect(x, MCLGUI::trig_y, MCLGUI::seq_w, MCLGUI::trig_h,
                               WHITE);
         oled_display.setTextColor(BLACK);
@@ -69,23 +72,15 @@ void RoutePage::toggle_routes_batch(bool solo) {
       GUI.display();
     }
   }
-  /*
-  for (i = 0; i < 16; i++) {
-    if (note_interface.notes[i] == 3) {
-      MD.muteTrack(i, true);
-    }
-  }
-*/
-  // send the track to master before unmuting
 
   for (i = 0; i < 16; i++) {
     if (!solo) {
-      if ((note_interface.notes[i] == 3)) {
+      if (note_interface.is_note_off(i)) {
         toggle_route(i, encoders[0]->cur);
       }
     } else {
       uint8_t routing_last = mcl_cfg.routing[i];
-      if (note_interface.notes[i] == 3) {
+      if (note_interface.is_note_off(i)) {
         mcl_cfg.routing[i] = 6;
       } else {
         if (mcl_cfg.routing[i] == 6) {
@@ -95,24 +90,7 @@ void RoutePage::toggle_routes_batch(bool solo) {
       if (mcl_cfg.routing[i] != routing_last) {
         MD.setTrackRouting(i, mcl_cfg.routing[i]);
       }
-    } ///
-    //  note_interface.notes[i] = 0;
-    // trackinfo_page.display();
-  }
-}
-
-void RoutePage::update_globals() {
-  if (hasChanged) {
-    ElektronDataToSysexEncoder encoder2(&MidiUart);
-    md_exploit.setup_global(1);
-    while ((MidiClock.state == 2) &&
-           ((MidiClock.mod12_counter > 6) || (MidiClock.mod12_counter == 0)))
-      ;
-    USE_LOCK();
-    SET_LOCK();
-    MD.global.toSysex(&encoder2);
-    CLEAR_LOCK();
-    hasChanged = false;
+    }
   }
 }
 
@@ -121,7 +99,7 @@ void RoutePage::display() {
 
   auto *oldfont = oled_display.getFont();
   oled_display.clearDisplay();
-  oled_display.drawBitmap(0, 0, icon_route, 24, 16, WHITE);
+  oled_display.drawBitmap(0, 0, R.icons_page->icon_route, 24, 16, WHITE);
 
   mcl_gui.draw_knob_frame();
 
@@ -134,7 +112,7 @@ void RoutePage::display() {
     strcpy(Q, "--");
   } else {
     x = 1 << encoders[1]->getValue();
-    itoa(x, Q, 10);
+    mcl_gui.put_value_at(x, Q);
   }
   mcl_gui.draw_knob(1, "QUANT", Q);
 
@@ -143,7 +121,7 @@ void RoutePage::display() {
       (64 *
        ((MidiClock.div16th_counter - mcl_actions.start_clock32th / 2) / 64));
 
-  itoa(step_count, Q, 10);
+  mcl_gui.put_value_at(step_count, Q);
   strcpy(info_line2, "STEP ");
   strcat(info_line2, Q);
   mcl_gui.draw_panel_labels("ROUTE", info_line2);
@@ -174,7 +152,6 @@ bool RoutePage::handleEvent(gui_event_t *event) {
         toggle_routes_batch();
         note_interface.init_notes();
         //  md_exploit.send_globals();
-        curpage = 0;
       }
     }
     return true;

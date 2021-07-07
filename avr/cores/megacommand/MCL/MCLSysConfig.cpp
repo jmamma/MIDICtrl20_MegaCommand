@@ -3,7 +3,6 @@
 void mclsys_apply_config() {
   DEBUG_PRINT_FN();
   mcl_cfg.write_cfg();
-  midi_setup.cfg_ports();
 #ifndef DEBUGMODE
 #ifdef MEGACOMMAND
   if ((!Serial) && (mcl_cfg.display_mirror == 1)) {
@@ -17,17 +16,13 @@ void mclsys_apply_config() {
   }
 #endif
 #endif
-  if (mcl_cfg.screen_saver == 1) {
-    GUI.use_screen_saver = true;
-  } else {
-    GUI.use_screen_saver = false;
-  }
-  if (MD.connected) {
-    if (mcl_cfg.track_select != 1) {
-      md_track_select.off();
-    }
-  }
 }
+
+void mclsys_apply_config_midi() {
+  mclsys_apply_config();
+  midi_setup.cfg_ports();
+}
+
 
 bool MCLSysConfig::write_cfg() {
   bool ret;
@@ -92,12 +87,15 @@ bool MCLSysConfig::cfg_init() {
   midi_forward = 0;
   auto_save = 1;
   auto_normalize = 1;
-  chain_mode = 2;
-  chain_rand_min = 0;
-  chain_rand_max = 1;
+  chain_mode = CHAIN_MANUAL;
+  chain_queue_length = 1;
+  chain_load_quant = 4;
+  link_rand_min = 0;
+  link_rand_max = 1;
   ram_page_mode = 0;
   track_select = 1;
-  track_type_select = 0xF;
+  track_type_select = 0b00000101;
+  uart2_device = 0;
   cfgfile.close();
 
   ret = write_cfg();

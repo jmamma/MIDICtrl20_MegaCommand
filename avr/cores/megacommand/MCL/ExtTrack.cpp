@@ -1,6 +1,10 @@
 #include "MCL_impl.h"
 
 void ExtTrack::transition_load(uint8_t tracknumber, SeqTrack* seq_track, uint8_t slotnumber) {
+  DEBUG_DUMP("transition_load_ext");
+  DEBUG_DUMP((uint16_t) seq_track);
+  DEBUG_DUMP(slotnumber);
+  DEBUG_DUMP(tracknumber);
   ExtSeqTrack *ext_track = (ExtSeqTrack *) seq_track;
   ext_track->buffer_notesoff();
   GridTrack::transition_load(tracknumber, seq_track, slotnumber);
@@ -19,14 +23,10 @@ bool ExtTrack::get_track_from_sysex(uint8_t tracknumber) {
 
 bool ExtTrack::load_seq_data(SeqTrack *seq_track) {
 #ifdef EXT_TRACKS
-  if (chain.speed == 0) {
-    chain.speed = SEQ_SPEED_2X;
-  }
   ExtSeqTrack *ext_track = (ExtSeqTrack *) seq_track;
   ext_track->buffer_notesoff();
   memcpy(ext_track->data(), &seq_data, sizeof(seq_data));
-  ext_track->speed = chain.speed;
-  ext_track->length = chain.length;
+  load_link_data(seq_track);
 #endif
   return true;
 }
@@ -47,8 +47,8 @@ bool ExtTrack::store_in_grid(uint8_t column, uint16_t row, SeqTrack *seq_track, 
 #ifdef EXT_TRACKS
   if (online) {
     get_track_from_sysex(column);
-    chain.length = seq_track->length;
-    chain.speed = seq_track->speed;
+    link.length = seq_track->length;
+    link.speed = seq_track->speed;
     memcpy(&seq_data, ext_track->data(), sizeof(seq_data));
   }
 #endif

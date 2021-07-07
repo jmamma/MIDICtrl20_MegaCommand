@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MCL.h"
+#include "new.h"
 
 #include "A4.h"
 #include "MD.h"
@@ -46,6 +47,7 @@
 #include "OscPage.h"
 #include "Wav.h"
 #include "WavDesigner.h"
+#include "WavDesignerPage.h"
 #include "DSP.h"
 #endif
 
@@ -59,24 +61,28 @@
 #include "MCLEncoder.h"
 
 #include "Grid.h"
+#include "GridLink.h"
 #include "GridChain.h"
 #include "GridRowHeader.h"
 #include "GridTask.h"
 
 #include "MCLClipBoard.h"
-#include "MDExploit.h"
 #include "MDSound.h"
 #include "MDTrackSelect.h"
 
 #include "LFO.h"
 #include "MDTrack.h"
+#include "MDLFOTrack.h"
 #include "MDFXTrack.h"
 #include "MDRouteTrack.h"
 #include "MDTempoTrack.h"
+#include "GridChainTrack.h"
 
+#include "ArpSeqTrack.h"
 #include "EmptyTrack.h"
 #include "LFOSeqTrack.h"
 #include "MNMTrack.h"
 
 #include "MCLActions.h"
 #include "MCLSeq.h"
+

@@ -18,17 +18,26 @@
 
 #define NUM_PARAM_PAGES 4
 
-#define SEQ_MENU_MASK 0
-#define SEQ_MENU_ARP 1
-#define SEQ_MENU_TRANSPOSE 2
-#define SEQ_MENU_TRACK 3
-#define SEQ_MENU_COPY 4
-#define SEQ_MENU_CLEAR_TRACK 5
-#define SEQ_MENU_CLEAR_LOCKS 6
-#define SEQ_MENU_PASTE 7
-#define SEQ_MENU_SPEED 8
-#define SEQ_MENU_SHIFT 9
-#define SEQ_MENU_REVERSE 10
+
+#define SEQ_MENU_TRACK 0
+#define SEQ_MENU_MASK 1
+#define SEQ_MENU_PIANOROLL 2
+#define SEQ_MENU_PARAMSELECT 3
+#define SEQ_MENU_SLIDE 4
+#define SEQ_MENU_ARP 5
+#define SEQ_MENU_TRANSPOSE 6
+#define SEQ_MENU_VEL 7
+#define SEQ_MENU_PROB 8
+#define SEQ_MENU_SPEED 9
+#define SEQ_MENU_LENGTH 10
+#define SEQ_MENU_CHANNEL 11
+#define SEQ_MENU_COPY 12
+#define SEQ_MENU_CLEAR_TRACK 13
+#define SEQ_MENU_CLEAR_LOCKS 14
+#define SEQ_MENU_PASTE 15
+#define SEQ_MENU_SHIFT 16
+#define SEQ_MENU_REVERSE 17
+#define SEQ_MENU_POLY 18
 
 extern MCLEncoder seq_param1;
 extern MCLEncoder seq_param2;
@@ -38,10 +47,7 @@ extern MCLEncoder seq_param4;
 extern MCLEncoder seq_lock1;
 extern MCLEncoder seq_lock2;
 
-#include "SeqParamPage.h"
 #include "SeqPtcPage.h"
-#include "SeqRlckPage.h"
-#include "SeqRtrkPage.h"
 #include "SeqStepPage.h"
 
 #ifdef EXT_TRACKS
@@ -49,30 +55,21 @@ extern MCLEncoder seq_lock2;
 extern uint8_t last_ext_track;
 #endif
 
-extern SeqParamPage seq_param_page[NUM_PARAM_PAGES];
+extern uint8_t last_md_track;
+
 extern SeqStepPage seq_step_page;
-extern SeqRtrkPage seq_rtrk_page;
-extern SeqRlckPage seq_rlck_page;
 
 #ifdef EXT_TRACKS
 extern SeqExtStepPage seq_extstep_page;
 #endif
 
 extern MCLEncoder ptc_param_oct;
-extern MCLEncoder ptc_param_finetune;
+extern MCLEncoder ptc_param_fine_tune;
 extern MCLEncoder ptc_param_len;
 extern MCLEncoder ptc_param_scale;
 
 extern SeqPtcPage seq_ptc_page;
 extern ArpPage arp_page;
-
-extern MCLEncoder seq_menu_value_encoder;
-extern MCLEncoder seq_menu_entry_encoder;
-extern MenuPage<11> seq_menu_page;
-
-extern MCLEncoder step_menu_value_encoder;
-extern MCLEncoder step_menu_entry_encoder;
-extern MenuPage<4> step_menu_page;
 
 extern void mcl_save_sound();
 extern void mcl_load_sound();

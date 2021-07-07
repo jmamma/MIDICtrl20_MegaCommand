@@ -1,4 +1,5 @@
 #include "MCL_impl.h"
+#include "ResourceManager.h"
 
 #define LFO_TYPE 0
 #define LFO_PARAM 1
@@ -26,11 +27,17 @@ void LFOPage::init() {
   oled_display.setFont();
 #endif
   update_encoders();
-
+  MD.sync_seqtrack(lfo_track->length, lfo_track->speed,
+                     lfo_track->step_count);
   if (lfo_track->mode != LFO_MODE_FREE) {
     trig_interface.on();
   }
+
+  // LFOPage not using base SeqPage init?
+  R.Clear();
+  R.use_machine_param_names();
 }
+
 void LFOPage::cleanup() {
   trig_interface.off();
 #ifdef OLED_DISPLAY
@@ -167,15 +174,15 @@ void LFOPage::draw_param(uint8_t knob, uint8_t dest, uint8_t param) {
 
   char myName[4] = "-- ";
 
-  PGM_P modelname = NULL;
+  const char* modelname = NULL;
   if (dest != 0) {
     if (dest < 17) {
-      modelname = model_param_name(MD.kit.models[dest - 1], param);
+      modelname = model_param_name(MD.kit.get_model(dest - 1), param);
     } else {
       modelname = fx_param_name(MD_FX_ECHO + dest - 17, param);
     }
     if (modelname != NULL) {
-      m_strncpy_p(myName, modelname, 4);
+      strncpy(myName, modelname, 4);
     }
   }
 #ifdef OLED_DISPLAY
@@ -209,7 +216,7 @@ void LFOPage::draw_dest(uint8_t knob, uint8_t value) {
     break;
   default:
     //  K[0] = 'T';
-    itoa(value, K, 10);
+    mcl_gui.put_value_at(value, K);
     break;
   }
 #ifdef OLED_DISPLAY
@@ -354,28 +361,33 @@ void LFOPage::display() {
   const uint64_t mute_mask = 0;
 
   switch (lfo_track->mode) {
-  case LFO_MODE_FREE:
-    info1 = "FREE";
-    break;
-  case LFO_MODE_TRIG:
-    draw_lock_mask(0, 0, lfo_track->step_count, lfo_track->length, true);
-    draw_mask(0, lfo_track->pattern_mask, lfo_track->step_count,
-                      lfo_track->length, mute_mask, slide_mask, true);
+    case LFO_MODE_TRIG:
     info1 = "TRIG";
     break;
-  case LFO_MODE_ONE:
-    draw_lock_mask(0, 0, lfo_track->step_count, lfo_track->length, true);
-    draw_mask(0, lfo_track->pattern_mask, lfo_track->step_count,
-                      lfo_track->length, mute_mask, slide_mask, true);
+    case LFO_MODE_ONE:
     info1 = "ONE";
     break;
+    info1 = "FREE";
+    break;
   }
+
+  if (lfo_track->mode == LFO_MODE_TRIG || lfo_track->mode == LFO_MODE_ONE) {
+    draw_lock_mask(0, 0, lfo_track->step_count, lfo_track->length, true);
+    draw_mask(0, lfo_track->pattern_mask, lfo_track->step_count,
+              lfo_track->length, mute_mask, slide_mask, true);
+    if ((uint16_t)lfo_track->pattern_mask != trigled_mask) {
+      trigled_mask = (uint16_t)lfo_track->pattern_mask;
+      MD.set_trigleds(lfo_track->pattern_mask, TRIGLED_STEPEDIT);
+    }
+  }
+
   mcl_gui.draw_panel_labels(info1, info2);
 
   oled_display.display();
   oled_display.setFont(oldfont);
 #endif
 }
+
 void LFOPage::onControlChangeCallback_Midi(uint8_t *msg) {
   uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
   uint8_t param = msg[1];
@@ -414,14 +426,13 @@ bool LFOPage::handleEvent(gui_event_t *event) {
   if (note_interface.is_event(event)) {
     uint8_t mask = event->mask;
     uint8_t port = event->port;
-    uint8_t device = midi_active_peering.get_device(port)->id;
+    auto device = midi_active_peering.get_device(port);
 
     uint8_t track = event->source - 128;
     uint8_t page_select = 0;
     uint8_t step = track + (page_select * 16);
-    uint8_t midi_device = device;
     if (event->mask == EVENT_BUTTON_PRESSED) {
-      if (device == DEVICE_A4) {
+      if (device == &Analog4) {
         // GUI.setPage(&seq_extstep_page)
         return true;
       }
@@ -430,7 +441,8 @@ bool LFOPage::handleEvent(gui_event_t *event) {
         SET_BIT64(lfo_track->pattern_mask, step);
       } else {
         DEBUG_PRINTLN(F("Trying to clear"));
-        if (clock_diff(note_interface.note_hold, slowclock) < TRIG_HOLD_TIME) {
+        if (clock_diff(note_interface.note_hold[port], slowclock) <
+            TRIG_HOLD_TIME) {
           CLEAR_BIT64(lfo_track->pattern_mask, step);
         }
       }

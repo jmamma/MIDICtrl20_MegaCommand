@@ -3,9 +3,9 @@
 #ifndef MDSEQTRACK_H__
 #define MDSEQTRACK_H__
 
+#include "MD.h"
 #include "MDSeqTrackData.h"
 #include "SeqTrack.h"
-#include "MD.h"
 
 #define UART1_PORT 1
 
@@ -15,34 +15,16 @@
 
 class MDTrack;
 
-class SlideData {
-public:
-  int16_t err;
-  int8_t inc;
-  int16_t dx;
-  int16_t dy;
-  int16_t x0;
-  int8_t y0;
-  int8_t y1;
-  bool steep;
-  int16_t x1;
-  uint8_t yflip;
-  ALWAYS_INLINE() void init() {
-    dy = 0;
-    dx = 0;
-  }
-};
-
-class MDSeqTrack : public MDSeqTrackData, public SeqTrack {
+class MDSeqTrack : public MDSeqTrackData, public SeqSlideTrack {
 
 public:
   uint64_t oneshot_mask;
+  uint8_t locks_params_orig[NUM_LOCKS];
 
-  uint8_t locks_params_orig[NUM_MD_LOCKS];
-  SlideData locks_slide_data[NUM_MD_LOCKS];
-  uint8_t locks_slide_next_lock_val[NUM_MD_LOCKS];
-  uint8_t locks_slide_next_lock_step[NUM_MD_LOCKS];
+  static uint16_t sync_cursor;
+  static uint16_t md_trig_mask;
 
+  MDSeqTrack() : SeqSlideTrack() { active = MD_TRACK_TYPE; }
   ALWAYS_INLINE() void reset() {
     SeqTrack::reset();
     oneshot_mask = 0;
@@ -53,7 +35,7 @@ public:
   bool get_step(uint8_t step, uint8_t mask_type) const;
   void set_step(uint8_t step, uint8_t mask_type, bool val);
 
-  void seq();
+  void seq(MidiUartParent *uart_);
 
   void mute() { mute_state = SEQ_MUTE_ON; }
   void unmute() { mute_state = SEQ_MUTE_OFF; }
@@ -61,11 +43,13 @@ public:
   void send_trig();
   ALWAYS_INLINE() void send_trig_inline();
   ALWAYS_INLINE() bool trig_conditional(uint8_t condition);
-  ALWAYS_INLINE() void send_parameter_locks(uint8_t step, bool trig);
+  void send_parameter_locks(uint8_t step, bool trig, uint16_t lock_idx = 0xFFFF);
+  ALWAYS_INLINE() void send_parameter_locks_inline(uint8_t step, bool trig, uint16_t lock_idx);
+  void get_step_locks(uint8_t step, uint8_t *params, bool ignore_locks_disabled = false);
 
-  ALWAYS_INLINE() void send_slides();
   ALWAYS_INLINE() void recalc_slides();
-  ALWAYS_INLINE() void find_next_locks(uint8_t curidx, uint8_t step, uint8_t mask);
+  ALWAYS_INLINE()
+  void find_next_locks(uint8_t curidx, uint8_t step, uint8_t mask);
 
   void set_track_pitch(uint8_t step, uint8_t pitch);
   void set_track_step(uint8_t step, uint8_t utiming, uint8_t velocity);
@@ -74,7 +58,9 @@ public:
   // !! Note track_param is param_id, not lock index
   bool set_track_locks(uint8_t step, uint8_t track_param, uint8_t velocity);
   // !! Note lockidx is lock index, not param_id
+
   uint8_t get_track_lock(uint8_t step, uint8_t lockidx);
+  uint8_t get_track_lock_implicit(uint8_t step, uint8_t param);
 
   void record_track(uint8_t velocity);
   void record_track_locks(uint8_t track_param, uint8_t value);
@@ -87,8 +73,9 @@ public:
   // access the step lock bitmap, masked by locks_enable bit.
   uint8_t get_step_locks(uint8_t step);
   void clear_conditional();
-  void clear_locks(bool reset_params = true);
-  void clear_track(bool locks = true, bool reset_params = true);
+  void clear_step_lock(uint8_t step, uint8_t param_id);
+  void clear_locks(bool reset_params_ = true);
+  void clear_track(bool locks = true, bool reset_params_ = true);
   void clear_param_locks(uint8_t param_id);
   bool is_param(uint8_t param_id);
   void update_kit_params();
@@ -97,7 +84,7 @@ public:
   void reset_params();
   void merge_from_md(uint8_t track_number, MDPattern *pattern);
 
-  void set_length(uint8_t len);
+  void set_length(uint8_t len, bool expand = false);
   void re_sync();
 
   void rotate_left() { modify_track(DIR_LEFT); }
@@ -106,11 +93,10 @@ public:
 
   void modify_track(uint8_t dir);
 
-  void set_speed(uint8_t _speed);
+  void set_speed(uint8_t new_speed, uint8_t old_speed = 255, bool timing_adjust = true);
 
   void copy_step(uint8_t n, MDSeqStep *step);
   void paste_step(uint8_t n, MDSeqStep *step);
-
 };
 
 #endif /* MDSEQTRACK_H__ */

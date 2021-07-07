@@ -4,18 +4,46 @@
 #define PageSelectPAGE_H__
 
 #include "GUI.h"
-#include "MD.h"
-
-#define USE_BLOCKINGKIT
+#include "MCLSeq.h"
 
 extern MCLEncoder page_select_param1;
 extern MCLEncoder page_select_param2;
 
+struct PageCategory {
+  char Name[8];
+  uint8_t PageCount;
+  uint8_t FirstPage;
+};
+
+struct PageSelectEntry {
+  char Name[16];
+  LightPage *Page;
+  uint8_t PageNumber; // same as trig id
+  uint8_t CategoryId;
+  uint8_t IconWidth;
+  uint8_t IconHeight;
+  uint8_t *IconData;
+};
+
+class MDCallback : public SysexCallback {
+public:
+  bool state = false;
+  void init() { state = true; }
+  void onReceived() {
+    if (MD.kit.fromSysex(MD.midi)) {
+      mcl_seq.update_kit_params();
+    }
+    auto listener = MD.getSysexListener();
+    listener->removeOnKitMessageCallback(this);
+    state = false;
+  }
+};
+
 class PageSelectPage : public LightPage {
 public:
-  #ifndef USE_BLOCKINGKIT
+
   MDCallback kit_cb;
-  #endif
+
   bool loop_init = false;
   uint8_t page_select;
   PageSelectPage(Encoder *e1 = NULL, Encoder *e2 = NULL, Encoder *e3 = NULL,

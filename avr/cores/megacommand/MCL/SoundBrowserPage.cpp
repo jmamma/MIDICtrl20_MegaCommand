@@ -1,4 +1,5 @@
 #include "MCL_impl.h"
+#include "ResourceManager.h"
 
 const char* c_sound_root = "/Sounds/MD";
 
@@ -21,6 +22,9 @@ void SoundBrowserPage::init() {
   show_new_folder = true;
   show_overwrite = true;
   FileBrowserPage::init();
+
+  R.Clear();
+  R.use_machine_names_short();
 }
 
 void SoundBrowserPage::save_sound() {
@@ -31,7 +35,7 @@ void SoundBrowserPage::save_sound() {
 
   grid_page.prepare();
   PGM_P tmp;
-  tmp = getMDMachineNameShort(MD.kit.models[MD.currentTrack], 2);
+  tmp = getMDMachineNameShort(MD.kit.get_model(MD.currentTrack), 2);
   memcpy(sound_name, MD.kit.name, 4);
   m_strncpy_p(&sound_name[5], tmp, 3);
 
